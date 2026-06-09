@@ -6,7 +6,9 @@
   "type": "module",
   "scripts": {
     "start": "node index.js",
-    "dev": "nodemon index.js"
+    "dev": "nodemon index.js",
+    "test-api": "node test-api.js",
+    "worker": "node worker.js"
   },
   "dependencies": {
     "bullmq": "^5.8.1",
