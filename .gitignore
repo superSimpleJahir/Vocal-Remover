@@ -47,6 +47,7 @@ python/
 ai-worker/downloads/
 ai-worker/separated/
 backend/downloads/
+test_runs/
 
 # Operating System files
 .DS_Store

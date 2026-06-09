@@ -3,9 +3,9 @@
 Today's focus is building the core AI worker logic: downloading audio from YouTube URLs using `yt-dlp` and splitting the audio tracks using the `demucs` model.
 
 ## Tasks Checklist
-- [ ] **Download Script**: Implement `ai-worker/downloader.py` to extract high-quality audio files from YouTube URLs.
-- [ ] **Separation Script**: Implement `ai-worker/separator.py` to execute Demucs 2-stem separation.
-- [ ] **Sanity Test**: Create a local test script `ai-worker/test_separation.py` to verify the download and separation loop.
+- [x] **Download Script**: Implement `ai-worker/downloader.py` to extract high-quality audio files from YouTube URLs.
+- [x] **Separation Script**: Implement `ai-worker/separator.py` to execute Demucs 2-stem separation.
+- [x] **Sanity Test**: Create a local test script `ai-worker/test_separation.py` to verify the download and separation loop.
 
 ---
 
