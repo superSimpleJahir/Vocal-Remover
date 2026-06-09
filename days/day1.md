@@ -9,8 +9,8 @@ Today's focus is initializing the project structure, dependencies, configuration
 - [x] **Workspace Configuration**: Created a unified `.env.example` in the root and configured `.gitignore` to prevent tracking of dependency folders, builds, audio files, and keys.
 
 ## Remaining Tasks
-- [ ] **AI Worker Setup**: Define python requirements in `ai-worker/requirements.txt`.
-- [ ] **Verify Local Redis**: Ensure Redis server is active for BullMQ queue management.
+- [x] **AI Worker Setup**: Define python requirements in `ai-worker/requirements.txt`.
+- [x] **Verify Local Redis**: Ensure Redis server is active for BullMQ queue management.
 
 ---
 
