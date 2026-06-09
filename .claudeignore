@@ -1,0 +1,24 @@
+# Ignore dependencies
+node_modules/
+.next/
+dist/
+build/
+venv/
+.venv/
+env/
+.env/
+
+# Ignore media and temporary processing files
+*.mp3
+*.wav
+*.mp4
+*.webm
+downloads/
+output/
+temp/
+
+# OS and IDE files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
