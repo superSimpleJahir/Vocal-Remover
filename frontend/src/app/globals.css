@@ -1,26 +1,106 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+@theme {
+  --color-background: #05070c;
+  --color-foreground: #f8fafc;
+  
+  --color-obsidian: #05070c;
+  --color-obsidian-card: rgba(11, 15, 25, 0.65);
+  --color-obsidian-card-hover: rgba(14, 20, 36, 0.75);
+  --color-obsidian-border: rgba(255, 255, 255, 0.06);
+  --color-obsidian-border-hover: rgba(255, 255, 255, 0.12);
+  
+  --color-neon-indigo: #6366f1;
+  --color-neon-indigo-glow: rgba(99, 102, 241, 0.25);
+  --color-electric-blue: #06b6d4;
+  --color-electric-blue-glow: rgba(6, 182, 212, 0.25);
+  
+  --color-emerald-success: #10b981;
+  --color-ruby-error: #f43f5e;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+/* Base body styles */
+body {
+  background-color: #05070c;
+  color: #f8fafc;
+  font-family: var(--font-geist-sans), system-ui, -apple-system, sans-serif;
+  overflow-x: hidden;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+/* Gradient and glow effects */
+.text-gradient {
+  background: linear-gradient(135deg, #a5b4fc 0%, #6366f1 50%, #06b6d4 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.text-gradient-vocal {
+  background: linear-gradient(135deg, #c084fc 0%, #a855f7 50%, #6366f1 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.text-gradient-instrumental {
+  background: linear-gradient(135deg, #67e8f9 0%, #06b6d4 50%, #3b82f6 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.glow-card {
+  box-shadow: 0 0 40px -10px rgba(99, 102, 241, 0.08);
+}
+
+.glow-card:hover {
+  box-shadow: 0 0 50px -5px rgba(6, 182, 212, 0.12);
+}
+
+.glow-active {
+  box-shadow: 0 0 25px 2px rgba(99, 102, 241, 0.15);
+}
+
+/* Standard custom scrollbar for dashboard */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #05070c;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #1e293b;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #334155;
+}
+
+/* Accent glass borders */
+.border-glass {
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.border-glass-glow {
+  border: 1px solid rgba(99, 102, 241, 0.25);
+}
+
+/* Stepper animations */
+@keyframes pulseGlow {
+  0%, 100% {
+    opacity: 0.6;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.05);
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+.pulse-glow {
+  animation: pulseGlow 2s infinite ease-in-out;
 }
