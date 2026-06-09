@@ -3,6 +3,19 @@ import os
 import argparse
 import sys
 import subprocess
+import wave
+import contextlib
+
+def get_wav_duration(wav_path: str) -> float:
+    """
+    Returns the duration of a WAV file in seconds.
+    Uses standard library's wave module.
+    """
+    with contextlib.closing(wave.open(wav_path, 'rb')) as f:
+        frames = f.getnframes()
+        rate = f.getframerate()
+        duration = frames / float(rate)
+        return duration
 
 def check_cuda() -> str:
     """
@@ -31,6 +44,21 @@ def separate_audio(input_file: str, output_dir: str):
         
     os.makedirs(output_dir, exist_ok=True)
     
+    # Check audio duration limit (default 10 minutes / 600 seconds)
+    max_duration_limit = float(os.getenv("MAX_AUDIO_DURATION_LIMIT", "600"))
+    try:
+        duration = get_wav_duration(input_file)
+        print(f"Input WAV duration: {duration:.2f} seconds")
+        if duration > max_duration_limit:
+            raise ValueError(
+                f"Audio duration ({duration / 60.0:.1f} minutes) exceeds the maximum limit "
+                f"of {max_duration_limit / 60.0:.1f} minutes."
+            )
+    except ValueError as ve:
+        raise ve
+    except Exception as e:
+        print(f"Warning: Could not check WAV duration: {e}", file=sys.stderr)
+    
     device = check_cuda()
     
     # Locate the demucs executable in the same virtual environment
@@ -57,7 +85,10 @@ def separate_audio(input_file: str, output_dir: str):
     # Run the demucs command
     result = subprocess.run(cmd)
     if result.returncode != 0:
-        raise RuntimeError(f"Demucs separation failed with exit code {result.returncode}")
+        if result.returncode == 137:
+            raise RuntimeError("Demucs separation process was terminated (out of memory). The audio file may be too large or complex for the server's resources.")
+        else:
+            raise RuntimeError(f"Demucs separation failed with exit code {result.returncode}")
         
     print(f"Demucs separation completed. Output saved to: {output_dir}")
 

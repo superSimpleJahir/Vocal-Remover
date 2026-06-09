@@ -27,6 +27,12 @@ def download_audio(url: str, output_dir: str) -> str:
         }],
         'quiet': False,
         'no_warnings': False,
+        'http_headers': {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.5',
+            'Sec-Fetch-Mode': 'navigate',
+        }
     }
     
     final_output_path = os.path.join(output_dir, 'audio.wav')
@@ -37,8 +43,19 @@ def download_audio(url: str, output_dir: str) -> str:
     print(f"Downloading from URL: {url}")
     print(f"Saving using template: {output_template}")
     
-    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        ydl.download([url])
+    try:
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            ydl.download([url])
+    except yt_dlp.utils.DownloadError as e:
+        err_msg = str(e)
+        if any(term in err_msg.lower() for term in ["sign in", "age", "confirm your age", "confirm_age"]):
+            raise RuntimeError("YouTube age restriction detected. This video requires age verification or sign-in and cannot be downloaded.")
+        elif any(term in err_msg.lower() for term in ["geo-restricted", "country", "not available in your", "geoblocked"]):
+            raise RuntimeError("YouTube geo-restriction detected. This video is country-locked.")
+        elif "copyright" in err_msg.lower():
+            raise RuntimeError("This video is blocked due to copyright restrictions.")
+        else:
+            raise RuntimeError(f"Failed to download audio from YouTube: {err_msg}")
         
     if not os.path.exists(final_output_path):
         # Fallback in case naming differed

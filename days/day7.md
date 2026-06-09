@@ -3,10 +3,10 @@
 Today's focus is finalizing the project for deployment: adding production-grade container configurations, robust error handling, and documenting verification walkthroughs.
 
 ## Tasks Checklist
-- [ ] **Dockerize Services**: Create a multi-service Dockerfile configuration to bundle Node.js, Python, FFmpeg, and Demucs packages.
-- [ ] **Error Edge Cases**: Handle processing errors (e.g. video country locks, YouTube age limits, out-of-memory errors on large files).
-- [ ] **Cleanup Scripts**: Ensure local scratch files are regularly cleaned up in the worker directory to prevent server storage leaks.
-- [ ] **Final Walkthrough**: Author `walkthrough.md` documenting verified workflows and screenshots.
+- [x] **Dockerize Services**: Create a multi-service Dockerfile configuration to bundle Node.js, Python, FFmpeg, and Demucs packages.
+- [x] **Error Edge Cases**: Handle processing errors (e.g. video country locks, YouTube age limits, out-of-memory errors on large files).
+- [x] **Cleanup Scripts**: Ensure local scratch files are regularly cleaned up in the worker directory to prevent server storage leaks.
+- [x] **Final Walkthrough**: Author `walkthrough.md` documenting verified workflows and screenshots.
 
 ---
 

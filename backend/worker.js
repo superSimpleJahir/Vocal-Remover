@@ -17,7 +17,13 @@ function toWslPath(winPath) {
   return wslPath.replace(/\\/g, '/');
 }
 
+const isWindows = process.platform === 'win32';
 const projectRootWsl = toWslPath(projectRootWin);
+const projectRoot = isWindows ? projectRootWsl : projectRootWin;
+
+const pythonPath = isWindows 
+  ? `${projectRootWsl}/ai-worker/venv/bin/python` 
+  : (process.env.PYTHON_PATH || 'python3');
 
 // Helper to clean up local job folders to save space
 async function cleanupLocalFolders(jobId) {
@@ -39,15 +45,65 @@ async function cleanupLocalFolders(jobId) {
   }
 }
 
+// Purge leftover/stale directories to prevent storage leaks
+async function purgeStaleTempDirs(maxAgeMs = 3600000) {
+  const dirsToClean = [
+    path.join(projectRootWin, 'ai-worker', 'downloads'),
+    path.join(projectRootWin, 'ai-worker', 'separated')
+  ];
+
+  const now = Date.now();
+
+  for (const parentDir of dirsToClean) {
+    try {
+      const items = await fs.readdir(parentDir, { withFileTypes: true });
+      for (const item of items) {
+        if (item.isDirectory()) {
+          const dirPath = path.join(parentDir, item.name);
+          const stats = await fs.stat(dirPath);
+          const age = now - stats.mtimeMs;
+          if (maxAgeMs === 0 || age > maxAgeMs) {
+            console.log(`[Cleanup] Removing stale temp directory: ${dirPath} (Age: ${Math.round(age / 60000)} mins)`);
+            await fs.rm(dirPath, { recursive: true, force: true });
+          }
+        }
+      }
+    } catch (err) {
+      if (err.code !== 'ENOENT') {
+        console.error(`[Cleanup] Error scanning ${parentDir}:`, err.message);
+      }
+    }
+  }
+}
+
+// Run startup cleanup (purge all leftover folders)
+purgeStaleTempDirs(0)
+  .then(() => console.log('[Cleanup] Startup workspace cleanup completed.'))
+  .catch((err) => console.error('[Cleanup] Startup workspace cleanup failed:', err));
+
+// Set up periodic cleanup every 30 minutes to clean files older than 1 hour
+setInterval(() => {
+  console.log('[Cleanup] Running periodic stale temp folder cleanup...');
+  purgeStaleTempDirs(3600000).catch((err) => console.error('[Cleanup] Periodic workspace cleanup failed:', err));
+}, 30 * 60 * 1000).unref();
+
 /**
- * Spawns a command inside WSL and returns a Promise.
+ * Spawns a command (either inside WSL on Windows, or directly on Linux/Docker) and returns a Promise.
  * Streams stdout and stderr to the console in real-time.
  * Resolves with the accumulated stdout string on success, or rejects on error.
  */
-function runWslCommand(args, jobId, phase) {
+function runCommand(executable, args, jobId, phase) {
   return new Promise((resolve, reject) => {
-    console.log(`[Job ${jobId}] [${phase}] Spawning: wsl ${args.join(' ')}`);
-    const child = spawn('wsl', args);
+    let spawnCmd = executable;
+    let spawnArgs = args;
+
+    if (isWindows) {
+      spawnCmd = 'wsl';
+      spawnArgs = [executable, ...args];
+    }
+
+    console.log(`[Job ${jobId}] [${phase}] Spawning: ${spawnCmd} ${spawnArgs.join(' ')}`);
+    const child = spawn(spawnCmd, spawnArgs);
     let stdoutData = '';
     let stderrData = '';
     let stdoutLineBuffer = '';
@@ -116,43 +172,38 @@ const worker = new Worker('audio-separation', async (job) => {
   console.log(`========================================`);
 
   try {
-    const pythonPath = `${projectRootWsl}/ai-worker/venv/bin/python`;
-
     // Step 1: Downloading
     console.log(`[Job ${jobId}] Starting Download phase...`);
     await pool.query("UPDATE jobs SET status = 'downloading' WHERE id = $1", [jobId]);
     
     const downloadArgs = [
-      pythonPath,
-      `${projectRootWsl}/ai-worker/downloader.py`,
+      `${projectRoot}/ai-worker/downloader.py`,
       '--url', youtubeUrl,
-      '--output', `${projectRootWsl}/ai-worker/downloads/${jobId}`
+      '--output', `${projectRoot}/ai-worker/downloads/${jobId}`
     ];
-    await runWslCommand(downloadArgs, jobId, 'DOWNLOAD');
+    await runCommand(pythonPath, downloadArgs, jobId, 'DOWNLOAD');
 
     // Step 2: Separating
     console.log(`[Job ${jobId}] Starting Separation phase...`);
     await pool.query("UPDATE jobs SET status = 'separating' WHERE id = $1", [jobId]);
     
     const separateArgs = [
-      pythonPath,
-      `${projectRootWsl}/ai-worker/separator.py`,
-      '--input', `${projectRootWsl}/ai-worker/downloads/${jobId}/audio.wav`,
-      '--output', `${projectRootWsl}/ai-worker/separated/${jobId}`
+      `${projectRoot}/ai-worker/separator.py`,
+      '--input', `${projectRoot}/ai-worker/downloads/${jobId}/audio.wav`,
+      '--output', `${projectRoot}/ai-worker/separated/${jobId}`
     ];
-    await runWslCommand(separateArgs, jobId, 'SEPARATE');
+    await runCommand(pythonPath, separateArgs, jobId, 'SEPARATE');
 
     // Step 3: Uploading
     console.log(`[Job ${jobId}] Starting Upload phase...`);
     await pool.query("UPDATE jobs SET status = 'uploading' WHERE id = $1", [jobId]);
     
     const uploadArgs = [
-      pythonPath,
-      `${projectRootWsl}/ai-worker/uploader.py`,
+      `${projectRoot}/ai-worker/uploader.py`,
       '--job-id', jobId,
-      '--input-dir', `${projectRootWsl}/ai-worker/separated/${jobId}`
+      '--input-dir', `${projectRoot}/ai-worker/separated/${jobId}`
     ];
-    const uploadOutput = await runWslCommand(uploadArgs, jobId, 'UPLOAD');
+    const uploadOutput = await runCommand(pythonPath, uploadArgs, jobId, 'UPLOAD');
 
     // Parse URLs from uploader stdout
     const vocalMatch = uploadOutput.match(/VOCAL_URL:\s*(https?:\/\/[^\s]+)/);
