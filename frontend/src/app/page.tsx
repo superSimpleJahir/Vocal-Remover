@@ -19,6 +19,8 @@ import {
   Sliders,
   Volume2
 } from "lucide-react";
+import Player from "@/components/Player";
+
 
 const Youtube = (props: React.SVGProps<SVGSVGElement>) => (
   <svg
@@ -42,158 +44,7 @@ interface Job {
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
 
-// Custom Audio Player component with sleek glassmorphic styling
-function AudioPlayer({ src, title, type }: { src: string; title: string; type: "vocal" | "instrumental" }) {
-  const audioRef = useRef<HTMLAudioElement>(null);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [currentTime, setCurrentTime] = useState(0);
-  const [duration, setDuration] = useState(0);
-  const [copied, setCopied] = useState(false);
 
-  useEffect(() => {
-    const audio = audioRef.current;
-    if (!audio) return;
-
-    const onTimeUpdate = () => setCurrentTime(audio.currentTime);
-    const onLoadedMetadata = () => setDuration(audio.duration);
-    const onEnded = () => setIsPlaying(false);
-
-    audio.addEventListener("timeupdate", onTimeUpdate);
-    audio.addEventListener("loadedmetadata", onLoadedMetadata);
-    audio.addEventListener("ended", onEnded);
-
-    // Reset player if source changes
-    setIsPlaying(false);
-    setCurrentTime(0);
-
-    return () => {
-      audio.removeEventListener("timeupdate", onTimeUpdate);
-      audio.removeEventListener("loadedmetadata", onLoadedMetadata);
-      audio.removeEventListener("ended", onEnded);
-    };
-  }, [src]);
-
-  const togglePlay = () => {
-    if (audioRef.current) {
-      if (isPlaying) {
-        audioRef.current.pause();
-      } else {
-        audioRef.current.play().catch((err) => console.error("Audio playback error:", err));
-      }
-      setIsPlaying(!isPlaying);
-    }
-  };
-
-  const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (audioRef.current) {
-      const seekValue = parseFloat(e.target.value);
-      audioRef.current.currentTime = seekValue;
-      setCurrentTime(seekValue);
-    }
-  };
-
-  const copyToClipboard = () => {
-    navigator.clipboard.writeText(src);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
-  const formatTime = (time: number) => {
-    if (isNaN(time)) return "0:00";
-    const minutes = Math.floor(time / 60);
-    const seconds = Math.floor(time % 60);
-    return `${minutes}:${seconds < 10 ? "0" : ""}${seconds}`;
-  };
-
-  const isVocal = type === "vocal";
-  const accentGradient = isVocal
-    ? "from-indigo-600 via-purple-600 to-pink-600 hover:from-indigo-500 hover:to-pink-500"
-    : "from-cyan-600 via-blue-600 to-indigo-600 hover:from-cyan-500 hover:to-indigo-500";
-
-  return (
-    <div className={`p-6 rounded-2xl border border-glass bg-obsidian-card hover:bg-obsidian-card-hover transition-all duration-300 shadow-xl relative overflow-hidden group`}>
-      {/* Decorative ambient background glow */}
-      <div className={`absolute -right-16 -top-16 w-36 h-36 rounded-full blur-3xl opacity-10 transition-all group-hover:scale-125 ${isVocal ? 'bg-purple-500' : 'bg-cyan-500'}`}></div>
-      
-      <audio ref={audioRef} src={src} preload="metadata" />
-
-      {/* Header Info */}
-      <div className="flex items-start justify-between mb-6">
-        <div className="flex items-center gap-4">
-          <div className={`p-3 rounded-xl border border-glass bg-white/[0.02] ${isVocal ? 'text-purple-400' : 'text-cyan-400'}`}>
-            {isVocal ? <Volume2 className="w-6 h-6" /> : <Sliders className="w-6 h-6" />}
-          </div>
-          <div>
-            <h3 className="font-semibold text-white tracking-wide text-lg">{title}</h3>
-            <span className={`inline-block px-2.5 py-0.5 mt-1 text-[10px] font-bold uppercase tracking-wider rounded-full bg-white/[0.04] border border-glass ${isVocal ? 'text-purple-400' : 'text-cyan-400'}`}>
-              {isVocal ? "vocals.wav" : "instrumental.wav"}
-            </span>
-          </div>
-        </div>
-
-        <div className="flex gap-2">
-          {/* Copy link */}
-          <button
-            onClick={copyToClipboard}
-            className="p-2 rounded-lg hover:bg-white/5 text-slate-400 hover:text-white transition-all border border-glass"
-            title="Copy URL to clipboard"
-          >
-            {copied ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
-          </button>
-          
-          {/* Download */}
-          <a
-            href={src}
-            download
-            target="_blank"
-            rel="noopener noreferrer"
-            className="p-2 rounded-lg hover:bg-white/5 text-slate-400 hover:text-white transition-all border border-glass"
-            title="Download track"
-          >
-            <Download className="w-4 h-4" />
-          </a>
-        </div>
-      </div>
-
-      {/* Audio controls */}
-      <div className="space-y-4">
-        {/* Timeline Slider */}
-        <div className="space-y-1.5">
-          <input
-            type="range"
-            min="0"
-            max={duration || 100}
-            value={currentTime}
-            onChange={handleSeek}
-            className={`w-full h-1.5 rounded-lg bg-slate-800/80 cursor-pointer appearance-none outline-none ${isVocal ? 'accent-purple-500' : 'accent-cyan-500'}`}
-          />
-          <div className="flex justify-between text-xs font-medium text-slate-400 tracking-wider">
-            <span>{formatTime(currentTime)}</span>
-            <span>{formatTime(duration)}</span>
-          </div>
-        </div>
-
-        {/* Playback action button */}
-        <button
-          onClick={togglePlay}
-          className={`w-full flex items-center justify-center gap-2 py-3 px-5 rounded-xl font-medium text-white transition-all duration-300 active:scale-98 bg-gradient-to-r shadow-lg shadow-black/30 border border-white/10`}
-        >
-          {isPlaying ? (
-            <>
-              <Pause className="w-4 h-4 fill-white" />
-              <span>Pause Preview</span>
-            </>
-          ) : (
-            <>
-              <Play className="w-4 h-4 fill-white" />
-              <span>Play Audio Stem</span>
-            </>
-          )}
-        </button>
-      </div>
-    </div>
-  );
-}
 
 export default function Home() {
   const [youtubeUrl, setYoutubeUrl] = useState("");
@@ -472,33 +323,35 @@ export default function Home() {
             <div className="w-full space-y-10">
               
               {/* Job Header Info */}
-              <div className="p-5 rounded-2xl border border-glass bg-obsidian-card flex flex-col md:flex-row justify-between items-start md:items-center gap-4 shadow-lg">
-                <div className="space-y-1 flex-1">
-                  <span className="text-xs font-mono uppercase tracking-widest text-indigo-400">Current Session</span>
-                  <div className="flex items-center gap-2">
-                    <Youtube className="w-5 h-5 text-rose-500 shrink-0" />
-                    <span className="font-semibold text-white truncate max-w-md block md:max-w-xl text-sm">
-                      {activeJob.youtube_url}
-                    </span>
+              {activeJob.status !== "completed" && (
+                <div className="p-5 rounded-2xl border border-glass bg-obsidian-card flex flex-col md:flex-row justify-between items-start md:items-center gap-4 shadow-lg">
+                  <div className="space-y-1 flex-1">
+                    <span className="text-xs font-mono uppercase tracking-widest text-indigo-400">Current Session</span>
+                    <div className="flex items-center gap-2">
+                      <Youtube className="w-5 h-5 text-rose-500 shrink-0" />
+                      <span className="font-semibold text-white truncate max-w-md block md:max-w-xl text-sm">
+                        {activeJob.youtube_url}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3 shrink-0">
+                    <div className="flex flex-col items-end text-xs">
+                      <span className="text-slate-400 font-mono">ID: {activeJob.id.slice(0, 8)}...</span>
+                      <span className="text-slate-500 mt-0.5">Created just now</span>
+                    </div>
+                    
+                    {/* Cancel/Reset button */}
+                    {!isProcessing && (
+                      <button
+                        onClick={handleReset}
+                        className="px-4 py-2 text-xs font-semibold rounded-lg bg-white/5 hover:bg-white/10 text-white transition-all border border-glass"
+                      >
+                        New Split
+                      </button>
+                    )}
                   </div>
                 </div>
-                <div className="flex items-center gap-3 shrink-0">
-                  <div className="flex flex-col items-end text-xs">
-                    <span className="text-slate-400 font-mono">ID: {activeJob.id.slice(0, 8)}...</span>
-                    <span className="text-slate-500 mt-0.5">Created just now</span>
-                  </div>
-                  
-                  {/* Cancel/Reset button */}
-                  {!isProcessing && (
-                    <button
-                      onClick={handleReset}
-                      className="px-4 py-2 text-xs font-semibold rounded-lg bg-white/5 hover:bg-white/10 text-white transition-all border border-glass"
-                    >
-                      New Split
-                    </button>
-                  )}
-                </div>
-              </div>
+              )}
 
               {/* Status Stepper / Progress Section */}
               {activeJob.status !== "failed" && activeJob.status !== "completed" && (
@@ -596,46 +449,15 @@ export default function Home() {
 
               {/* Completed / Results Card */}
               {activeJob.status === "completed" && (
-                <div className="space-y-6 animate-fade-in">
-                  
-                  {/* Banner header for results */}
-                  <div className="p-6 rounded-3xl bg-gradient-to-r from-indigo-950/30 via-slate-900/20 to-cyan-950/30 border border-glass flex flex-col md:flex-row items-center justify-between gap-4 shadow-xl">
-                    <div className="flex items-center gap-3">
-                      <div className="w-12 h-12 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400">
-                        <CheckCircle2 className="w-6 h-6" />
-                      </div>
-                      <div>
-                        <h3 className="font-bold text-white text-lg">Separation Completed!</h3>
-                        <p className="text-xs text-slate-400">Vocals and instrumental stems extracted in full quality</p>
-                      </div>
-                    </div>
-
-                    <button
-                      onClick={handleReset}
-                      className="py-2.5 px-6 rounded-xl font-bold text-white bg-white/5 hover:bg-white/10 transition-all border border-glass active:scale-98 flex items-center gap-2"
-                    >
-                      <RefreshCw className="w-4 h-4" />
-                      <span>Convert Another</span>
-                    </button>
-                  </div>
-
-                  {/* Side-by-side Audio Players */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {activeJob.vocal_url && (
-                      <AudioPlayer 
-                        src={activeJob.vocal_url} 
-                        title="Vocal Stem" 
-                        type="vocal" 
-                      />
-                    )}
-                    {activeJob.instrumental_url && (
-                      <AudioPlayer 
-                        src={activeJob.instrumental_url} 
-                        title="Instrumental Stem" 
-                        type="instrumental" 
-                      />
-                    )}
-                  </div>
+                <div className="animate-fade-in w-full">
+                  {activeJob.vocal_url && activeJob.instrumental_url && (
+                    <Player
+                      vocalUrl={activeJob.vocal_url}
+                      instrumentalUrl={activeJob.instrumental_url}
+                      youtubeUrl={activeJob.youtube_url}
+                      onReset={handleReset}
+                    />
+                  )}
                 </div>
               )}
             </div>

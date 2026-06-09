@@ -104,3 +104,31 @@ body {
 .pulse-glow {
   animation: pulseGlow 2s infinite ease-in-out;
 }
+
+/* Custom slider styling for crossfader */
+.accent-gradient-crossfader {
+  appearance: none;
+  background: linear-gradient(to right, #a855f7 0%, #6366f1 50%, #06b6d4 100%) !important;
+  height: 6px !important;
+  border-radius: 9999px;
+  outline: none;
+  transition: opacity 0.2s;
+}
+
+.accent-gradient-crossfader::-webkit-slider-thumb {
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #ffffff;
+  border: 2px solid #6366f1;
+  cursor: pointer;
+  box-shadow: 0 0 10px rgba(99, 102, 241, 0.6);
+  transition: all 0.2s;
+}
+
+.accent-gradient-crossfader::-webkit-slider-thumb:hover {
+  transform: scale(1.15);
+  box-shadow: 0 0 15px rgba(99, 102, 241, 0.9);
+}
+
