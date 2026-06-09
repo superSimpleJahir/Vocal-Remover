@@ -1,13 +1,10 @@
 import { Worker } from 'bullmq';
-import { exec } from 'child_process';
-import { promisify } from 'util';
+import { spawn } from 'child_process';
 import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import pool from './db.js';
 import { connection } from './queue.js';
-
-const execAsync = promisify(exec);
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -42,6 +39,72 @@ async function cleanupLocalFolders(jobId) {
   }
 }
 
+/**
+ * Spawns a command inside WSL and returns a Promise.
+ * Streams stdout and stderr to the console in real-time.
+ * Resolves with the accumulated stdout string on success, or rejects on error.
+ */
+function runWslCommand(args, jobId, phase) {
+  return new Promise((resolve, reject) => {
+    console.log(`[Job ${jobId}] [${phase}] Spawning: wsl ${args.join(' ')}`);
+    const child = spawn('wsl', args);
+    let stdoutData = '';
+    let stderrData = '';
+    let stdoutLineBuffer = '';
+    let stderrLineBuffer = '';
+
+    child.stdout.on('data', (data) => {
+      const str = data.toString();
+      stdoutData += str;
+      
+      stdoutLineBuffer += str;
+      const lines = stdoutLineBuffer.split('\n');
+      stdoutLineBuffer = lines.pop(); // Keep the last incomplete line
+      for (const line of lines) {
+        if (line.trim()) {
+          console.log(`[Job ${jobId}] [${phase}] ${line.trim()}`);
+        }
+      }
+    });
+
+    child.stderr.on('data', (data) => {
+      const str = data.toString();
+      stderrData += str;
+      
+      stderrLineBuffer += str;
+      const lines = stderrLineBuffer.split('\n');
+      stderrLineBuffer = lines.pop(); // Keep the last incomplete line
+      for (const line of lines) {
+        if (line.trim()) {
+          console.error(`[Job ${jobId}] [${phase}] [ERR] ${line.trim()}`);
+        }
+      }
+    });
+
+    child.on('close', (code) => {
+      if (stdoutLineBuffer.trim()) {
+        console.log(`[Job ${jobId}] [${phase}] ${stdoutLineBuffer.trim()}`);
+      }
+      if (stderrLineBuffer.trim()) {
+        console.error(`[Job ${jobId}] [${phase}] [ERR] ${stderrLineBuffer.trim()}`);
+      }
+      
+      if (code === 0) {
+        resolve(stdoutData);
+      } else {
+        const errMsg = `Process exited with code ${code}.`;
+        console.error(`[Job ${jobId}] [${phase}] Failed: ${errMsg}`);
+        reject(new Error(errMsg + (stderrData ? ` Stderr: ${stderrData}` : '')));
+      }
+    });
+
+    child.on('error', (err) => {
+      console.error(`[Job ${jobId}] [${phase}] Spawn error:`, err.message);
+      reject(err);
+    });
+  });
+}
+
 // Setup BullMQ worker
 const worker = new Worker('audio-separation', async (job) => {
   const jobId = job.data.id;
@@ -53,39 +116,47 @@ const worker = new Worker('audio-separation', async (job) => {
   console.log(`========================================`);
 
   try {
+    const pythonPath = `${projectRootWsl}/ai-worker/venv/bin/python`;
+
     // Step 1: Downloading
     console.log(`[Job ${jobId}] Starting Download phase...`);
     await pool.query("UPDATE jobs SET status = 'downloading' WHERE id = $1", [jobId]);
     
-    const downloadCmd = `wsl ${projectRootWsl}/ai-worker/venv/bin/python ${projectRootWsl}/ai-worker/downloader.py --url "${youtubeUrl}" --output "${projectRootWsl}/ai-worker/downloads/${jobId}"`;
-    console.log(`Executing: ${downloadCmd}`);
-    const downloadResult = await execAsync(downloadCmd);
-    console.log(downloadResult.stdout);
-    if (downloadResult.stderr) console.error(downloadResult.stderr);
+    const downloadArgs = [
+      pythonPath,
+      `${projectRootWsl}/ai-worker/downloader.py`,
+      '--url', youtubeUrl,
+      '--output', `${projectRootWsl}/ai-worker/downloads/${jobId}`
+    ];
+    await runWslCommand(downloadArgs, jobId, 'DOWNLOAD');
 
     // Step 2: Separating
     console.log(`[Job ${jobId}] Starting Separation phase...`);
     await pool.query("UPDATE jobs SET status = 'separating' WHERE id = $1", [jobId]);
     
-    const separateCmd = `wsl ${projectRootWsl}/ai-worker/venv/bin/python ${projectRootWsl}/ai-worker/separator.py --input "${projectRootWsl}/ai-worker/downloads/${jobId}/audio.wav" --output "${projectRootWsl}/ai-worker/separated/${jobId}"`;
-    console.log(`Executing: ${separateCmd}`);
-    const separateResult = await execAsync(separateCmd);
-    console.log(separateResult.stdout);
-    if (separateResult.stderr) console.error(separateResult.stderr);
+    const separateArgs = [
+      pythonPath,
+      `${projectRootWsl}/ai-worker/separator.py`,
+      '--input', `${projectRootWsl}/ai-worker/downloads/${jobId}/audio.wav`,
+      '--output', `${projectRootWsl}/ai-worker/separated/${jobId}`
+    ];
+    await runWslCommand(separateArgs, jobId, 'SEPARATE');
 
     // Step 3: Uploading
     console.log(`[Job ${jobId}] Starting Upload phase...`);
     await pool.query("UPDATE jobs SET status = 'uploading' WHERE id = $1", [jobId]);
     
-    const uploadCmd = `wsl ${projectRootWsl}/ai-worker/venv/bin/python ${projectRootWsl}/ai-worker/uploader.py --job-id "${jobId}" --input-dir "${projectRootWsl}/ai-worker/separated/${jobId}"`;
-    console.log(`Executing: ${uploadCmd}`);
-    const uploadResult = await execAsync(uploadCmd);
-    console.log(uploadResult.stdout);
-    if (uploadResult.stderr) console.error(uploadResult.stderr);
+    const uploadArgs = [
+      pythonPath,
+      `${projectRootWsl}/ai-worker/uploader.py`,
+      '--job-id', jobId,
+      '--input-dir', `${projectRootWsl}/ai-worker/separated/${jobId}`
+    ];
+    const uploadOutput = await runWslCommand(uploadArgs, jobId, 'UPLOAD');
 
     // Parse URLs from uploader stdout
-    const vocalMatch = uploadResult.stdout.match(/VOCAL_URL:\s*(https?:\/\/[^\s]+)/);
-    const instrumentalMatch = uploadResult.stdout.match(/INSTRUMENTAL_URL:\s*(https?:\/\/[^\s]+)/);
+    const vocalMatch = uploadOutput.match(/VOCAL_URL:\s*(https?:\/\/[^\s]+)/);
+    const instrumentalMatch = uploadOutput.match(/INSTRUMENTAL_URL:\s*(https?:\/\/[^\s]+)/);
 
     if (!vocalMatch || !instrumentalMatch) {
       throw new Error("Failed to parse uploaded URLs from python script stdout.");

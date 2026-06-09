@@ -3,10 +3,10 @@
 Today's focus is implementing the uploader logic to Cloudflare R2 and wiring up the BullMQ Worker in Node.js to manage the job execution pipeline.
 
 ## Tasks Checklist
-- [ ] **R2 Uploader Script**: Write `ai-worker/uploader.py` using `boto3` to upload WAV/MP3 tracks to Cloudflare R2 buckets.
-- [ ] **Queue Worker**: Build `backend/worker.js` to process tasks from the `audio-processing` queue.
-- [ ] **Child Process Wrapper**: Write execution wrapper to spawn python scripts, capture status updates from stdout, and reflect them in Neon DB.
-- [ ] **Integration Test**: Verify end-to-end flow from backend posting -> queue -> worker -> python separation -> R2 uploads -> DB updates.
+- [x] **R2 Uploader Script**: Write `ai-worker/uploader.py` using `boto3` to upload WAV/MP3 tracks to Cloudflare R2 buckets.
+- [x] **Queue Worker**: Build `backend/worker.js` to process tasks from the `audio-processing` queue.
+- [x] **Child Process Wrapper**: Write execution wrapper to spawn python scripts, capture status updates from stdout, and reflect them in Neon DB.
+- [x] **Integration Test**: Verify end-to-end flow from backend posting -> queue -> worker -> python separation -> R2 uploads -> DB updates.
 
 ---
 
