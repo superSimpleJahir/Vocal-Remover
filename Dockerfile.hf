@@ -1,0 +1,48 @@
+# Dockerfile optimized for Hugging Face Spaces (Backend & AI-worker)
+FROM pytorch/pytorch:2.1.0-cuda12.1-cudnn8-runtime
+
+# Prevent interactive prompts during package installations
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Install Redis, FFmpeg, curl, Node.js, and git
+RUN apt-get update && apt-get install -y \
+    redis-server \
+    ffmpeg \
+    curl \
+    gnupg \
+    git \
+    && curl -fsSL https://deb.nodesource.com/setup_18.x | bash - \
+    && apt-get install -y nodejs \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Copy AI worker requirements and install dependencies
+COPY ai-worker/requirements.txt ./ai-worker/requirements.txt
+RUN pip install --no-cache-dir -r ./ai-worker/requirements.txt
+
+# Copy package files and install backend dependencies
+COPY backend/package*.json ./backend/
+RUN cd backend && npm ci
+
+# Copy backend and worker sources
+COPY backend/ ./backend/
+COPY ai-worker/ ./ai-worker/
+
+# Create folders for downloads and separated tracks, and set permissive permissions for Hugging Face User UID 1000
+RUN mkdir -p /app/ai-worker/downloads /app/ai-worker/separated && chmod -R 777 /app
+
+# Set Torch and Demucs cache directories to a writable temp path
+ENV TORCH_HOME=/tmp/torch
+ENV NUMBA_CACHE_DIR=/tmp/numba
+ENV PORT=7860
+
+# Copy startup script and make it executable
+COPY start.sh ./start.sh
+RUN chmod +x ./start.sh
+
+# Expose Hugging Face Space default port
+EXPOSE 7860
+
+# Run the startup script
+CMD ["./start.sh"]
