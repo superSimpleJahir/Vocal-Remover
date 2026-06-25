@@ -73,9 +73,20 @@ def separate_audio(input_file: str, output_dir: str):
         print(f"Warning: demucs binary not found at {demucs_bin}. Trying python fallback...")
         cmd = [sys.executable, "-m", "demucs"]
         
+    # Determine optimal CPU threads for parallel processing (use half of the cores to avoid CPU choking)
+    cpu_cores = os.cpu_count() or 1
+    jobs = max(1, cpu_cores // 2)
+
     cmd.extend([
         "--two-stems=vocals",
         "-d", device,
+    ])
+
+    if device == "cpu":
+        cmd.extend(["-j", str(jobs)])
+        print(f"Using {jobs} CPU threads for parallel separation.")
+
+    cmd.extend([
         "-o", output_dir,
         input_file
     ])

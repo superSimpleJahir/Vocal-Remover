@@ -16,6 +16,7 @@ const PORT = process.env.PORT || 5000;
 
 app.use(cors());
 app.use(express.json());
+app.use('/tracks', express.static(path.join(__dirname, '../ai-worker/separated')));
 
 // YouTube URL Validation (matches www.youtube.com, youtube.com, youtu.be)
 function isValidYoutubeUrl(urlStr) {

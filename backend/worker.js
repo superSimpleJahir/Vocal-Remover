@@ -25,18 +25,20 @@ const pythonPath = isWindows
   ? `${projectRootWsl}/ai-worker/venv/bin/python` 
   : (process.env.PYTHON_PATH || 'python3');
 
-// Helper to clean up local job folders to save space
-async function cleanupLocalFolders(jobId) {
+// Helper to clean up local downloads folder to save space
+async function cleanupDownloadsFolder(jobId) {
   const downloadsPath = path.join(projectRootWin, 'ai-worker', 'downloads', jobId);
-  const separatedPath = path.join(projectRootWin, 'ai-worker', 'separated', jobId);
-
   try {
     await fs.rm(downloadsPath, { recursive: true, force: true });
     console.log(`Cleaned up downloads folder: ${downloadsPath}`);
   } catch (err) {
     console.error(`Failed to clean downloads folder ${downloadsPath}:`, err.message);
   }
+}
 
+// Helper to clean up local separated folder to save space
+async function cleanupSeparatedFolder(jobId) {
+  const separatedPath = path.join(projectRootWin, 'ai-worker', 'separated', jobId);
   try {
     await fs.rm(separatedPath, { recursive: true, force: true });
     console.log(`Cleaned up separated folder: ${separatedPath}`);
@@ -223,8 +225,8 @@ const worker = new Worker('audio-separation', async (job) => {
       [vocalUrl, instrumentalUrl, jobId]
     );
 
-    // Cleanup
-    await cleanupLocalFolders(jobId);
+    // Cleanup downloads only, keep separated MP3s for local serving
+    await cleanupDownloadsFolder(jobId);
 
   } catch (error) {
     console.error(`[Job ${jobId}] Failed with error:`, error.message);
@@ -235,8 +237,9 @@ const worker = new Worker('audio-separation', async (job) => {
       [error.message || "Unknown error occurred during processing", jobId]
     );
 
-    // Cleanup local directories in case of failure as well
-    await cleanupLocalFolders(jobId);
+    // Cleanup both downloads and separated on failure
+    await cleanupDownloadsFolder(jobId);
+    await cleanupSeparatedFolder(jobId);
 
     // Throw the error to let BullMQ know the job failed
     throw error;
@@ -244,6 +247,8 @@ const worker = new Worker('audio-separation', async (job) => {
 }, {
   connection,
   concurrency: 1, // Process one job at a time
+  lockDuration: 600000, // 10 minutes lock duration to prevent timeouts during audio separation
+  lockRenewTime: 30000, // Renew every 30 seconds
 });
 
 worker.on('ready', () => {

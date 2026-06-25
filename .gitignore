@@ -52,3 +52,6 @@ test_runs/
 # Operating System files
 .DS_Store
 Thumbs.db
+
+# Redis database dump
+dump.rdb
