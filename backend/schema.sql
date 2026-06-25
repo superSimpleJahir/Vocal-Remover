@@ -16,6 +16,7 @@ CREATE TABLE IF NOT EXISTS jobs (
     error_message TEXT,
     vocal_url TEXT,
     instrumental_url TEXT,
+    vocal_no_silence_url TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL
 );

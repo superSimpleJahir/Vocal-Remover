@@ -17,16 +17,19 @@ import {
 interface PlayerProps {
   vocalUrl: string;
   instrumentalUrl: string;
+  vocalNoSilenceUrl?: string;
   youtubeUrl: string;
   onReset: () => void;
 }
 
-export default function Player({ vocalUrl, instrumentalUrl, youtubeUrl, onReset }: PlayerProps) {
+export default function Player({ vocalUrl, instrumentalUrl, vocalNoSilenceUrl, youtubeUrl, onReset }: PlayerProps) {
   const vocalContainerRef = useRef<HTMLDivElement>(null);
   const instrumentalContainerRef = useRef<HTMLDivElement>(null);
+  const vocalNoSilenceContainerRef = useRef<HTMLDivElement>(null);
 
   const vocalWSRef = useRef<any>(null);
   const instrumentalWSRef = useRef<any>(null);
+  const vocalNoSilenceWSRef = useRef<any>(null);
 
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
@@ -48,6 +51,14 @@ export default function Player({ vocalUrl, instrumentalUrl, youtubeUrl, onReset 
   const [isLoadingVocal, setIsLoadingVocal] = useState(true);
   const [isLoadingInstrumental, setIsLoadingInstrumental] = useState(true);
   const [error, setError] = useState("");
+
+  // Silence-Removed States
+  const [isNoSilencePlaying, setIsNoSilencePlaying] = useState(false);
+  const [noSilenceCurrentTime, setNoSilenceCurrentTime] = useState(0);
+  const [noSilenceDuration, setNoSilenceDuration] = useState(0);
+  const [isLoadingNoSilence, setIsLoadingNoSilence] = useState(true);
+  const [noSilenceVolume, setNoSilenceVolume] = useState(100);
+  const [noSilenceMuted, setNoSilenceMuted] = useState(false);
 
   // Helper to format time
   const formatTime = (time: number) => {
@@ -196,11 +207,87 @@ export default function Player({ vocalUrl, instrumentalUrl, youtubeUrl, onReset 
     };
   }, [vocalUrl, instrumentalUrl]);
 
+  // Load Silence-Removed Wavesurfer instance
+  useEffect(() => {
+    let active = true;
+    let wsNoSilenceInstance: any = null;
+    if (!vocalNoSilenceUrl) return;
+
+    const initWavesurfer = async () => {
+      try {
+        const WaveSurfer = (await import("wavesurfer.js")).default;
+
+        if (!active) return;
+        if (!vocalNoSilenceContainerRef.current) return;
+
+        wsNoSilenceInstance = WaveSurfer.create({
+          container: vocalNoSilenceContainerRef.current,
+          waveColor: "rgba(139, 92, 246, 0.2)", // Translucent purple
+          progressColor: "#a78bfa", // Vivid purple
+          cursorColor: "#c084fc",
+          cursorWidth: 2,
+          height: 80,
+          barWidth: 2,
+          barGap: 3,
+          barRadius: 2,
+          url: vocalNoSilenceUrl,
+        });
+
+        vocalNoSilenceWSRef.current = wsNoSilenceInstance;
+
+        wsNoSilenceInstance.on("ready", (dur: number) => {
+          if (!active) return;
+          setIsLoadingNoSilence(false);
+          setNoSilenceDuration(dur);
+          
+          // Apply initial volume
+          const vol = noSilenceMuted ? 0 : noSilenceVolume / 100;
+          wsNoSilenceInstance.setVolume(vol);
+        });
+
+        wsNoSilenceInstance.on("timeupdate", (time: number) => {
+          if (!active) return;
+          setNoSilenceCurrentTime(time);
+        });
+
+        wsNoSilenceInstance.on("finish", () => {
+          wsNoSilenceInstance.setTime(0);
+          setIsNoSilencePlaying(false);
+        });
+
+      } catch (err) {
+        console.error("Error loading silence-removed wavesurfer:", err);
+      }
+    };
+
+    initWavesurfer();
+
+    return () => {
+      active = false;
+      if (wsNoSilenceInstance) wsNoSilenceInstance.destroy();
+    };
+  }, [vocalNoSilenceUrl]);
+
+  // Handle solo player volume updates reactively
+  useEffect(() => {
+    const ws = vocalNoSilenceWSRef.current;
+    if (ws) {
+      ws.setVolume(noSilenceMuted ? 0 : noSilenceVolume / 100);
+    }
+  }, [noSilenceVolume, noSilenceMuted]);
+
   // Master Playback controls
   const togglePlay = () => {
     const vWS = vocalWSRef.current;
     const iWS = instrumentalWSRef.current;
     if (!vWS || !iWS) return;
+
+    // Pause the silence-removed player if it is playing
+    const nsWS = vocalNoSilenceWSRef.current;
+    if (nsWS && isNoSilencePlaying) {
+      nsWS.pause();
+      setIsNoSilencePlaying(false);
+    }
 
     if (isPlaying) {
       vWS.pause();
@@ -223,6 +310,28 @@ export default function Player({ vocalUrl, instrumentalUrl, youtubeUrl, onReset 
     if (vWS) vWS.setTime(0);
     if (iWS) iWS.setTime(0);
     setCurrentTime(0);
+  };
+
+  const toggleNoSilencePlay = () => {
+    const nsWS = vocalNoSilenceWSRef.current;
+    if (!nsWS) return;
+
+    // Pause the main mixer if it is playing
+    const vWS = vocalWSRef.current;
+    const iWS = instrumentalWSRef.current;
+    if (isPlaying) {
+      if (vWS) vWS.pause();
+      if (iWS) iWS.pause();
+      setIsPlaying(false);
+    }
+
+    if (isNoSilencePlaying) {
+      nsWS.pause();
+      setIsNoSilencePlaying(false);
+    } else {
+      nsWS.play();
+      setIsNoSilencePlaying(true);
+    }
   };
 
   const vocalWeightPercent = 100 - crossfade;
@@ -497,6 +606,124 @@ export default function Player({ vocalUrl, instrumentalUrl, youtubeUrl, onReset 
 
         </div>
       </div>
+
+      {/* Dedicated Silence-Removed Vocal Player Panel */}
+      {vocalNoSilenceUrl && (
+        <div className="p-8 rounded-3xl border border-glass bg-obsidian-card glow-card shadow-2xl relative overflow-hidden">
+          {/* Subtle Accent Glow */}
+          <div className="absolute -left-20 -top-20 w-48 h-48 rounded-full blur-[100px] opacity-10 bg-purple-500"></div>
+
+          <div className="flex justify-between items-center mb-8 pb-4 border-b border-glass relative z-10">
+            <div>
+              <h3 className="text-xl font-black text-white tracking-wide flex items-center gap-2">
+                <Sparkles className="w-5 h-5 text-purple-400" />
+                <span>Vocal Solo (Silence Removed)</span>
+              </h3>
+              <p className="text-xs text-slate-400 mt-1 font-medium">Continuous vocal track with silent gaps extracted</p>
+            </div>
+            <div className="text-xs font-mono text-purple-400 bg-purple-500/10 border border-purple-500/20 px-3 py-1.5 rounded-lg font-bold flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-purple-400 animate-pulse"></span>
+              SOLO MODE
+            </div>
+          </div>
+
+          {/* Player controls & waveform */}
+          <div className="space-y-6 relative z-10">
+            <div className="p-5 rounded-2xl border border-glass bg-black/20 hover:border-purple-500/20 transition-all duration-300">
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
+                <div className="flex items-center gap-2.5">
+                  <span className="w-2 h-2 rounded-full bg-purple-500"></span>
+                  <span className="text-xs font-bold tracking-wider uppercase text-purple-400">Silence-Free Vocals</span>
+                  <span className="text-[10px] font-mono text-slate-500">vocals_no_silence.mp3</span>
+                </div>
+                
+                <div className="flex items-center gap-4 w-full sm:w-auto justify-between">
+                  <div className="flex items-center gap-2 flex-1 sm:flex-none">
+                    <button
+                      onClick={() => setNoSilenceMuted(!noSilenceMuted)}
+                      className={`p-2 rounded-lg border border-glass transition-colors ${
+                        noSilenceMuted ? "bg-purple-950/40 text-purple-400 border-purple-500/30" : "text-slate-400 hover:text-white"
+                      }`}
+                      title="Mute Vocals"
+                    >
+                      {noSilenceMuted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
+                    </button>
+                    <input
+                      type="range"
+                      min="0"
+                      max="100"
+                      value={noSilenceVolume}
+                      onChange={(e) => setNoSilenceVolume(parseInt(e.target.value))}
+                      className="w-24 h-1.5 rounded-lg bg-slate-800 accent-purple-500 cursor-pointer appearance-none outline-none"
+                      disabled={noSilenceMuted}
+                    />
+                    <span className="text-xs font-mono text-slate-400 w-8 text-right">
+                      {noSilenceMuted ? "Mute" : `${noSilenceVolume}%`}
+                    </span>
+                  </div>
+
+                  <a
+                    href={vocalNoSilenceUrl}
+                    download="vocals_no_silence.mp3"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-1.5 py-2 px-3.5 text-xs font-bold rounded-lg bg-purple-600/10 hover:bg-purple-600/20 text-purple-300 hover:text-white border border-purple-500/20 hover:border-purple-500/40 transition-all duration-300 shrink-0"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    <span className="hidden xs:inline">Download</span>
+                  </a>
+                </div>
+              </div>
+
+              {/* Waveform Canvas */}
+              <div className="relative bg-black/40 rounded-xl p-2.5 border border-glass">
+                {isLoadingNoSilence && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-obsidian-card rounded-xl z-20 backdrop-blur-[2px]">
+                    <div className="flex items-center gap-2 text-purple-400 text-sm font-semibold">
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>Loading Silence-Free Vocals...</span>
+                    </div>
+                  </div>
+                )}
+                <div ref={vocalNoSilenceContainerRef} id="vocals-no-silence-waveform" className="w-full"></div>
+              </div>
+            </div>
+            
+            {/* Solo Player Transport Control */}
+            <div className="flex items-center gap-4 pt-4">
+              <button
+                onClick={toggleNoSilencePlay}
+                disabled={isLoadingNoSilence}
+                className="w-12 h-12 flex items-center justify-center rounded-2xl bg-gradient-to-tr from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white shadow-lg shadow-purple-500/20 hover:shadow-indigo-500/30 active:scale-95 transition-all duration-300 disabled:opacity-50 disabled:pointer-events-none"
+              >
+                {isNoSilencePlaying ? <Pause className="w-5 h-5 fill-white" /> : <Play className="w-5 h-5 fill-white ml-0.5" />}
+              </button>
+              
+              <button
+                onClick={() => {
+                  const nsWS = vocalNoSilenceWSRef.current;
+                  if (nsWS) nsWS.setTime(0);
+                  setNoSilenceCurrentTime(0);
+                }}
+                disabled={isLoadingNoSilence}
+                className="p-3 rounded-xl border border-glass bg-white/[0.02] hover:bg-white/5 text-slate-400 hover:text-white transition-colors active:scale-95 disabled:opacity-50"
+                title="Restart playback"
+              >
+                <RotateCcw className="w-4.5 h-4.5" />
+              </button>
+
+              <div className="flex flex-col">
+                <span className="text-md font-mono font-bold tracking-tight text-white">
+                  {formatTime(noSilenceCurrentTime)}
+                </span>
+                <span className="text-[10px] font-mono text-slate-500 uppercase tracking-wider font-semibold">
+                  Duration {formatTime(noSilenceDuration)}
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

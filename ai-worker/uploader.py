@@ -4,8 +4,10 @@ import sys
 import argparse
 import subprocess
 import boto3
+import shutil
 from botocore.config import Config
 from dotenv import load_dotenv
+
 
 # Load env variables from root .env
 base_dir = os.path.dirname(os.path.abspath(__file__))
@@ -43,6 +45,42 @@ def convert_wav_to_mp3(input_wav: str, output_mp3: str):
     if result.returncode != 0:
         raise RuntimeError(f"FFmpeg conversion failed: {result.stderr.decode('utf-8')}")
     print(f"Conversion completed: {output_mp3}")
+
+def remove_silence_from_wav(input_wav: str, output_wav: str):
+    """
+    Removes silence from a WAV file using FFmpeg's silenceremove filter.
+    Falls back to copying the input_wav to output_wav if silence removal fails.
+    """
+    if not os.path.exists(input_wav):
+        raise FileNotFoundError(f"WAV file not found at: {input_wav}")
+        
+    cmd = [
+        'ffmpeg', '-y',
+        '-i', input_wav,
+        '-af', 'silenceremove=start_periods=1:start_threshold=-45dB:stop_periods=-1:stop_duration=0.5:stop_threshold=-45dB',
+        output_wav
+    ]
+    print(f"Removing silence from WAV: {' '.join(cmd)}")
+    try:
+        result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        if result.returncode != 0:
+            print(f"Warning: FFmpeg silence removal exited with code {result.returncode}. Stderr: {result.stderr.decode('utf-8')}", file=sys.stderr)
+            raise RuntimeError("FFmpeg silence removal failed")
+            
+        if not os.path.exists(output_wav) or os.path.getsize(output_wav) == 0:
+            print("Warning: Silence removal output is missing or empty. Falling back to original vocals.", file=sys.stderr)
+            raise RuntimeError("Empty silence removal output")
+            
+        print(f"Silence removal completed successfully: {output_wav}")
+    except Exception as e:
+        print(f"Error during silence removal ({e}). Falling back to copying original file.", file=sys.stderr)
+        if os.path.exists(output_wav):
+            try:
+                os.remove(output_wav)
+            except Exception:
+                pass
+        shutil.copy2(input_wav, output_wav)
+        print("Copied original WAV to silence-removed output as fallback.")
 
 def upload_file_to_r2(local_path: str, r2_key: str) -> str:
     """
@@ -117,24 +155,38 @@ def main():
             
     # Converted MP3 files local paths
     vocals_mp3 = os.path.join(input_dir, "vocals.mp3")
+    vocals_no_silence_mp3 = os.path.join(input_dir, "vocals_no_silence.mp3")
     instrumental_mp3 = os.path.join(input_dir, "instrumental.mp3")
     
-    # 1. Convert to MP3
+    # Locate/create path for vocals_no_silence.wav
+    vocals_no_silence_wav = os.path.join(os.path.dirname(vocals_wav), "vocals_no_silence.wav")
+
+    # 1. Process Silence Removal on vocals
+    print("Processing silence removal from vocals...")
+    remove_silence_from_wav(vocals_wav, vocals_no_silence_wav)
+
+    # 2. Convert to MP3
     print("Converting vocals.wav to vocals.mp3...")
     convert_wav_to_mp3(vocals_wav, vocals_mp3)
+    
+    print("Converting vocals_no_silence.wav to vocals_no_silence.mp3...")
+    convert_wav_to_mp3(vocals_no_silence_wav, vocals_no_silence_mp3)
     
     print("Converting no_vocals.wav to instrumental.mp3...")
     convert_wav_to_mp3(no_vocals_wav, instrumental_mp3)
     
-    # 2. Upload to R2
+    # 3. Upload to R2
     vocals_key = f"tracks/{job_id}/vocals.mp3"
+    vocals_no_silence_key = f"tracks/{job_id}/vocals_no_silence.mp3"
     instrumental_key = f"tracks/{job_id}/instrumental.mp3"
     
     vocal_url = upload_file_to_r2(vocals_mp3, vocals_key)
+    vocal_no_silence_url = upload_file_to_r2(vocals_no_silence_mp3, vocals_no_silence_key)
     instrumental_url = upload_file_to_r2(instrumental_mp3, instrumental_key)
     
-    # 3. Print URLs for parent Node process to capture
+    # 4. Print URLs for parent Node process to capture
     print(f"VOCAL_URL: {vocal_url}")
+    print(f"VOCAL_NO_SILENCE_URL: {vocal_no_silence_url}")
     print(f"INSTRUMENTAL_URL: {instrumental_url}")
     print("UPLOAD_SUCCESS")
 

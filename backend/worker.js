@@ -209,6 +209,7 @@ const worker = new Worker('audio-separation', async (job) => {
 
     // Parse URLs from uploader stdout
     const vocalMatch = uploadOutput.match(/VOCAL_URL:\s*(https?:\/\/[^\s]+)/);
+    const vocalNoSilenceMatch = uploadOutput.match(/VOCAL_NO_SILENCE_URL:\s*(https?:\/\/[^\s]+)/);
     const instrumentalMatch = uploadOutput.match(/INSTRUMENTAL_URL:\s*(https?:\/\/[^\s]+)/);
 
     if (!vocalMatch || !instrumentalMatch) {
@@ -216,13 +217,14 @@ const worker = new Worker('audio-separation', async (job) => {
     }
 
     const vocalUrl = vocalMatch[1];
+    const vocalNoSilenceUrl = vocalNoSilenceMatch ? vocalNoSilenceMatch[1] : null;
     const instrumentalUrl = instrumentalMatch[1];
 
     // Step 4: Completed
     console.log(`[Job ${jobId}] Job separation completed successfully!`);
     await pool.query(
-      "UPDATE jobs SET status = 'completed', vocal_url = $1, instrumental_url = $2 WHERE id = $3",
-      [vocalUrl, instrumentalUrl, jobId]
+      "UPDATE jobs SET status = 'completed', vocal_url = $1, instrumental_url = $2, vocal_no_silence_url = $3 WHERE id = $4",
+      [vocalUrl, instrumentalUrl, vocalNoSilenceUrl, jobId]
     );
 
     // Cleanup downloads only, keep separated MP3s for local serving

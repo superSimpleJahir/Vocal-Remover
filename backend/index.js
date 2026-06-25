@@ -86,7 +86,7 @@ app.get('/api/jobs/:id', async (req, res) => {
 
   try {
     const queryText = `
-      SELECT id, youtube_url, status, error_message, vocal_url, instrumental_url, created_at
+      SELECT id, youtube_url, status, error_message, vocal_url, instrumental_url, vocal_no_silence_url, created_at
       FROM jobs
       WHERE id = $1;
     `;

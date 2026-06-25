@@ -39,6 +39,7 @@ interface Job {
   error_message?: string;
   vocal_url?: string;
   instrumental_url?: string;
+  vocal_no_silence_url?: string;
   created_at?: string;
 }
 
@@ -454,6 +455,7 @@ export default function Home() {
                     <Player
                       vocalUrl={activeJob.vocal_url}
                       instrumentalUrl={activeJob.instrumental_url}
+                      vocalNoSilenceUrl={activeJob.vocal_no_silence_url}
                       youtubeUrl={activeJob.youtube_url}
                       onReset={handleReset}
                     />
