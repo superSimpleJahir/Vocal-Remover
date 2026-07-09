@@ -16,6 +16,15 @@ const PORT = process.env.PORT || 5000;
 
 app.use(cors());
 app.use(express.json());
+
+// Normalize duplicate slashes in URL paths (ignoring query parameters)
+app.use((req, res, next) => {
+  const parts = req.url.split('?');
+  parts[0] = parts[0].replace(/\/+/g, '/');
+  req.url = parts.join('?');
+  next();
+});
+
 app.use('/tracks', express.static(path.join(__dirname, '../ai-worker/separated')));
 
 // YouTube URL Validation (matches www.youtube.com, youtube.com, youtu.be)
@@ -34,6 +43,14 @@ function isValidUuid(uuid) {
   const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
   return uuidRegex.test(uuid);
 }
+
+// Root endpoint returning friendly status JSON
+app.get('/', (req, res) => {
+  res.json({
+    status: 'online',
+    message: 'Vocal Remover API is running. Health check at /health.'
+  });
+});
 
 // Health check endpoint
 app.get('/health', (req, res) => {

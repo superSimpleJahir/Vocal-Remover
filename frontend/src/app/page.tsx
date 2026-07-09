@@ -43,7 +43,9 @@ interface Job {
   created_at?: string;
 }
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
+const RAW_API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
+// Clean up trailing slashes to prevent double-slash (//) routing issues in some proxy environments
+const API_URL = RAW_API_URL.endsWith('/') ? RAW_API_URL.slice(0, -1) : RAW_API_URL;
 
 
 
