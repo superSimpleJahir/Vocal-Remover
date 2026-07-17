@@ -1,7 +1,16 @@
 // Using native global fetch (Node 18+)
 
+import dotenv from 'dotenv';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+dotenv.config({ path: path.resolve(__dirname, '../.env') });
+
 async function runTests() {
-  const baseUrl = 'http://localhost:5000';
+  const port = process.env.PORT || 5000;
+  const baseUrl = `http://localhost:${port}`;
   
   console.log('--- Testing /health ---');
   try {

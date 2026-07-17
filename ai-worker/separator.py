@@ -6,6 +6,16 @@ import subprocess
 import wave
 import contextlib
 
+try:
+    from dotenv import load_dotenv
+    # Load env variables from root .env
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    project_root = os.path.dirname(base_dir)
+    dotenv_path = os.path.join(project_root, '.env')
+    load_dotenv(dotenv_path)
+except ImportError:
+    pass
+
 def get_wav_duration(wav_path: str) -> float:
     """
     Returns the duration of a WAV file in seconds.
@@ -77,7 +87,9 @@ def separate_audio(input_file: str, output_dir: str):
     cpu_cores = os.cpu_count() or 1
     jobs = max(1, cpu_cores // 2)
 
+    model = os.getenv("DEMUCS_MODEL", "htdemucs")
     cmd.extend([
+        "-n", model,
         "--two-stems=vocals",
         "-d", device,
     ])

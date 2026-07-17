@@ -133,9 +133,10 @@ def main():
     input_dir = args.input_dir
     
     # Locate Demucs output
-    # Demucs output folder is under {input_dir}/htdemucs/audio/
-    vocals_wav = os.path.join(input_dir, "htdemucs", "audio", "vocals.wav")
-    no_vocals_wav = os.path.join(input_dir, "htdemucs", "audio", "no_vocals.wav")
+    # Demucs output folder is under {input_dir}/{model}/audio/
+    model = os.getenv("DEMUCS_MODEL", "htdemucs")
+    vocals_wav = os.path.join(input_dir, model, "audio", "vocals.wav")
+    no_vocals_wav = os.path.join(input_dir, model, "audio", "no_vocals.wav")
     
     if not os.path.exists(vocals_wav) or not os.path.exists(no_vocals_wav):
         # Scan input_dir recursively for vocals.wav and no_vocals.wav (just in case)

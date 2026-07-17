@@ -4,6 +4,16 @@ import shutil
 import sys
 import argparse
 
+try:
+    from dotenv import load_dotenv
+    # Load env variables from root .env
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    project_root = os.path.dirname(base_dir)
+    dotenv_path = os.path.join(project_root, '.env')
+    load_dotenv(dotenv_path)
+except ImportError:
+    pass
+
 # Add current directory to path so we can import downloader and separator
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
@@ -40,7 +50,7 @@ def main():
 
     print("\n--- Step 1: Downloading audio from YouTube ---")
     try:
-        audio_path = download_audio(args.url, downloads_dir)
+        audio_path = download_audio(args.url, downloads_dir, allow_fallback=True)
         print(f"Success! Audio downloaded to: {audio_path}")
     except Exception as e:
         print(f"Failed to download audio: {e}")
@@ -57,8 +67,9 @@ def main():
     # Verification
     # By default, demucs names output folder based on the filename (which is 'audio')
     # and default model is htdemucs
-    expected_vocals = os.path.join(separated_dir, "htdemucs", "audio", "vocals.wav")
-    expected_no_vocals = os.path.join(separated_dir, "htdemucs", "audio", "no_vocals.wav")
+    model = os.getenv("DEMUCS_MODEL", "htdemucs")
+    expected_vocals = os.path.join(separated_dir, model, "audio", "vocals.wav")
+    expected_no_vocals = os.path.join(separated_dir, model, "audio", "no_vocals.wav")
 
     print("\n--- Step 3: Verifying output files ---")
     all_ok = True

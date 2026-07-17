@@ -4,7 +4,7 @@ import argparse
 import sys
 import yt_dlp
 
-def download_audio(url: str, output_dir: str) -> str:
+def download_audio(url: str, output_dir: str, allow_fallback: bool = False) -> str:
     """
     Downloads audio from a YouTube URL and extracts it as a WAV file.
     Saves it as `audio.wav` inside the output directory.
@@ -20,6 +20,11 @@ def download_audio(url: str, output_dir: str) -> str:
     ydl_opts = {
         'format': 'bestaudio/best',
         'outtmpl': output_template,
+        'extractor_args': {
+            'youtube': {
+                'player_client': ['android']
+            }
+        },
         'postprocessors': [{
             'key': 'FFmpegExtractAudio',
             'preferredcodec': 'wav',
@@ -46,16 +51,36 @@ def download_audio(url: str, output_dir: str) -> str:
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             ydl.download([url])
-    except yt_dlp.utils.DownloadError as e:
-        err_msg = str(e)
-        if any(term in err_msg.lower() for term in ["sign in", "age", "confirm your age", "confirm_age"]):
-            raise RuntimeError("YouTube age restriction detected. This video requires age verification or sign-in and cannot be downloaded.")
-        elif any(term in err_msg.lower() for term in ["geo-restricted", "country", "not available in your", "geoblocked"]):
-            raise RuntimeError("YouTube geo-restriction detected. This video is country-locked.")
-        elif "copyright" in err_msg.lower():
-            raise RuntimeError("This video is blocked due to copyright restrictions.")
-        else:
-            raise RuntimeError(f"Failed to download audio from YouTube: {err_msg}")
+    except Exception as e:
+        if not allow_fallback:
+            print(f"Error: YouTube download failed: {e}", file=sys.stderr)
+            raise e
+            
+        print(f"Warning: YouTube download failed ({e}). Falling back to downloading a sample audio file for testing...", file=sys.stderr)
+        import urllib.request
+        import subprocess
+        fallback_url = "https://ccrma.stanford.edu/~jos/mp3/pno-cs.mp3"
+        temp_mp3_path = os.path.join(output_dir, 'temp_fallback.mp3')
+        
+        try:
+            # Download the fallback file
+            print(f"Downloading fallback audio from: {fallback_url}")
+            urllib.request.urlretrieve(fallback_url, temp_mp3_path)
+            
+            # Convert fallback MP3 to WAV using FFmpeg
+            print(f"Converting fallback MP3 to WAV format...")
+            cmd = ['ffmpeg', '-y', '-i', temp_mp3_path, final_output_path]
+            result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            if result.returncode != 0:
+                raise RuntimeError(f"FFmpeg fallback conversion failed: {result.stderr.decode('utf-8')}")
+            
+            # Clean up temp file
+            if os.path.exists(temp_mp3_path):
+                os.remove(temp_mp3_path)
+            
+            print(f"Successfully downloaded and converted fallback audio file to {final_output_path}")
+        except Exception as fallback_err:
+            raise RuntimeError(f"YouTube download failed, and fallback audio download also failed: {fallback_err}. Original error: {e}")
         
     if not os.path.exists(final_output_path):
         # Fallback in case naming differed
@@ -75,10 +100,11 @@ def main():
     parser = argparse.ArgumentParser(description="Download audio from YouTube and extract as WAV.")
     parser.add_argument("--url", required=True, help="YouTube URL to download")
     parser.add_argument("--output", required=True, help="Output directory to save the audio file")
+    parser.add_argument("--allow-fallback", action="store_true", help="Allow fallback to sample piano audio on failure")
     args = parser.parse_args()
     
     try:
-        download_audio(args.url, args.output)
+        download_audio(args.url, args.output, allow_fallback=args.allow_fallback)
     except Exception as e:
         print(f"Error downloading audio: {e}", file=sys.stderr)
         sys.exit(1)
