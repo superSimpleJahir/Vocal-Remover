@@ -5,6 +5,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import pool from './db.js';
 import { audioQueue } from './queue.js';
+import { getJobMetadata } from './metadataStore.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -113,7 +114,10 @@ app.get('/api/jobs/:id', async (req, res) => {
       return res.status(404).json({ error: 'Job not found' });
     }
 
-    res.json(result.rows[0]);
+    const job = result.rows[0];
+    const metadata = getJobMetadata(id);
+
+    res.json(metadata ? { ...job, metadata } : job);
   } catch (err) {
     console.error('Failed to query job:', err);
     res.status(500).json({ error: 'Internal server error' });

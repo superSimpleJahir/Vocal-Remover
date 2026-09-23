@@ -32,6 +32,13 @@ const Youtube = (props: React.SVGProps<SVGSVGElement>) => (
   </svg>
 );
 
+interface JobMetadata {
+  title: string;
+  description: string;
+  tags: string[];
+  thumbnailUrl: string | null;
+}
+
 interface Job {
   id: string;
   youtube_url: string;
@@ -41,6 +48,7 @@ interface Job {
   instrumental_url?: string;
   vocal_no_silence_url?: string;
   created_at?: string;
+  metadata?: JobMetadata;
 }
 
 const RAW_API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
@@ -55,6 +63,7 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [activeJob, setActiveJob] = useState<Job | null>(null);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const [metadataPollAttempts, setMetadataPollAttempts] = useState(0);
 
   // Status mapping to display steps and percentages
   const getStatusProgress = (status: Job['status']) => {
@@ -135,11 +144,15 @@ export default function Home() {
         }
         
         const updatedJob: Job = await res.json();
-        
+
         // Only update if state actually changed to avoid state flicker
         if (updatedJob.status !== activeJob.status) {
           setActiveJob(updatedJob);
         } else if (updatedJob.status === "completed" && (updatedJob.vocal_url !== activeJob.vocal_url)) {
+          setActiveJob(updatedJob);
+        } else if (updatedJob.status === "completed" && updatedJob.metadata && !activeJob.metadata) {
+          // AI title/description/tags/thumbnail generation runs in parallel and can
+          // finish slightly after separation - pick it up on the next tick(s).
           setActiveJob(updatedJob);
         }
       } catch (err) {
@@ -147,18 +160,29 @@ export default function Home() {
       }
     };
 
-    const isProcessing = activeJob && 
-      activeJob.status !== "completed" && 
+    const isProcessing = activeJob &&
+      activeJob.status !== "completed" &&
       activeJob.status !== "failed";
 
-    if (isProcessing) {
-      pollInterval = setInterval(pollJobStatus, 2000);
+    // Keep polling briefly after completion if the AI metadata hasn't arrived yet
+    const isWaitingForMetadata = activeJob &&
+      activeJob.status === "completed" &&
+      !activeJob.metadata &&
+      metadataPollAttempts < 6;
+
+    if (isProcessing || isWaitingForMetadata) {
+      pollInterval = setInterval(() => {
+        pollJobStatus();
+        if (isWaitingForMetadata) {
+          setMetadataPollAttempts((prev) => prev + 1);
+        }
+      }, 2000);
     }
 
     return () => {
       if (pollInterval) clearInterval(pollInterval);
     };
-  }, [activeJob]);
+  }, [activeJob, metadataPollAttempts]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -173,6 +197,7 @@ export default function Home() {
     setLoading(true);
     setElapsedSeconds(0);
     setActiveJob(null);
+    setMetadataPollAttempts(0);
 
     try {
       const response = await fetch(`${API_URL}/api/jobs`, {
@@ -206,6 +231,7 @@ export default function Home() {
     setActiveJob(null);
     setError("");
     setElapsedSeconds(0);
+    setMetadataPollAttempts(0);
   };
 
   const formatElapsed = (totalSeconds: number) => {
@@ -459,6 +485,8 @@ export default function Home() {
                       instrumentalUrl={activeJob.instrumental_url}
                       vocalNoSilenceUrl={activeJob.vocal_no_silence_url}
                       youtubeUrl={activeJob.youtube_url}
+                      metadata={activeJob.metadata}
+                      apiUrl={API_URL}
                       onReset={handleReset}
                     />
                   )}

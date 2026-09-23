@@ -5,6 +5,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import pool from './db.js';
 import { connection } from './queue.js';
+import { setJobMetadata, deleteJobMetadata } from './metadataStore.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -67,6 +68,7 @@ async function purgeStaleTempDirs(maxAgeMs = 3600000) {
           if (maxAgeMs === 0 || age > maxAgeMs) {
             console.log(`[Cleanup] Removing stale temp directory: ${dirPath} (Age: ${Math.round(age / 60000)} mins)`);
             await fs.rm(dirPath, { recursive: true, force: true });
+            deleteJobMetadata(item.name);
           }
         }
       }
@@ -163,6 +165,38 @@ function runCommand(executable, args, jobId, phase) {
   });
 }
 
+// Best-effort: fetches original YouTube title/description/tags/thumbnail,
+// asks the local Ollama model to rewrite them for an instrumental upload, and
+// renders a branded thumbnail. Runs in parallel with the main separation
+// pipeline and never throws - a failure here should not fail the job.
+async function generateMetadata(jobId, youtubeUrl) {
+  try {
+    const metadataArgs = [
+      `${projectRoot}/ai-worker/metadata.py`,
+      '--url', youtubeUrl,
+      '--output-dir', `${projectRoot}/ai-worker/separated/${jobId}`
+    ];
+    const output = await runCommand(pythonPath, metadataArgs, jobId, 'METADATA');
+
+    const match = output.match(/METADATA_JSON:(\{.*\})/);
+    if (!match) {
+      throw new Error('Could not find METADATA_JSON in metadata.py output');
+    }
+
+    const parsed = JSON.parse(match[1]);
+    setJobMetadata(jobId, {
+      title: parsed.generated?.title || parsed.original?.title || '',
+      description: parsed.generated?.description || '',
+      tags: parsed.generated?.tags || [],
+      thumbnailUrl: parsed.thumbnailFile ? `/tracks/${jobId}/${parsed.thumbnailFile}` : null,
+      original: parsed.original || null,
+    });
+    console.log(`[Job ${jobId}] Metadata generation completed.`);
+  } catch (error) {
+    console.error(`[Job ${jobId}] Metadata generation failed (non-fatal):`, error.message);
+  }
+}
+
 // Setup BullMQ worker
 const worker = new Worker('audio-separation', async (job) => {
   const jobId = job.data.id;
@@ -172,6 +206,10 @@ const worker = new Worker('audio-separation', async (job) => {
   console.log(`Processing Job: ${jobId}`);
   console.log(`URL: ${youtubeUrl}`);
   console.log(`========================================`);
+
+  // Kick off AI title/description/tags + thumbnail generation in parallel -
+  // it doesn't block the separation pipeline and is allowed to fail silently.
+  generateMetadata(jobId, youtubeUrl);
 
   try {
     // Step 1: Downloading
@@ -242,6 +280,7 @@ const worker = new Worker('audio-separation', async (job) => {
     // Cleanup both downloads and separated on failure
     await cleanupDownloadsFolder(jobId);
     await cleanupSeparatedFolder(jobId);
+    deleteJobMetadata(jobId);
 
     // Throw the error to let BullMQ know the job failed
     throw error;
